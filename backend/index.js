@@ -21,7 +21,21 @@ import { configurePassport } from "./passport/passport.config.js";
 
 import job from "./cron.js";
 
-dotenv.config();
+// Ensure .env file is loaded from backend folder
+const envPath = path.resolve("backend/.env");
+console.log(`🟢 Loading environment variables from: ${envPath}`);
+dotenv.config({ path: envPath });
+
+// Debugging: Check if environment variables are loaded
+console.log("🔍 SESSION_SECRET:", process.env.SESSION_SECRET ? "Loaded ✅" : "Not Loaded ❌");
+console.log("🔍 MONGO_URI:", process.env.MONGO_URI ? "Loaded ✅" : "Not Loaded ❌");
+
+// Check if required environment variables exist
+if (!process.env.SESSION_SECRET || !process.env.MONGO_URI) {
+    console.error("❌ Missing required environment variables. Check your .env file.");
+    process.exit(1);
+}
+
 configurePassport();
 
 const __dirname = path.resolve();
@@ -31,32 +45,32 @@ const httpServer = http.createServer(app);
 const MongoDBStore = connectMongo(session);
 
 const store = new MongoDBStore({
-	uri: process.env.MONGO_URI,
-	collection: "sessions",
+    uri: process.env.MONGO_URI,
+    collection: "sessions",
 });
 
 store.on("error", (err) => console.log("❌ MongoDB Session Store Error:", err));
 
 app.use(
-	session({
-		secret: process.env.SESSION_SECRET,
-		resave: false, // Prevents unnecessary resaving of sessions
-		saveUninitialized: false, // Prevents storing empty sessions
-		cookie: {
-			maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-			httpOnly: true, // Protects against XSS attacks
-		},
-		store: store,
-	})
+    session({
+        secret: process.env.SESSION_SECRET,
+        resave: false, // Prevents unnecessary resaving of sessions
+        saveUninitialized: false, // Prevents storing empty sessions
+        cookie: {
+            maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+            httpOnly: true, // Protects against XSS attacks
+        },
+        store: store,
+    })
 );
 
 app.use(passport.initialize());
 app.use(passport.session());
 
 const server = new ApolloServer({
-	typeDefs: mergedTypeDefs,
-	resolvers: mergedResolvers,
-	plugins: [ApolloServerPluginDrainHttpServer({ httpServer })],
+    typeDefs: mergedTypeDefs,
+    resolvers: mergedResolvers,
+    plugins: [ApolloServerPluginDrainHttpServer({ httpServer })],
 });
 
 // Ensure we wait for our server to start
@@ -64,22 +78,22 @@ await server.start();
 
 // Set up Express middleware
 app.use(
-	"/graphql",
-	cors({
-		origin: "http://localhost:3000",
-		credentials: true,
-	}),
-	express.json(),
-	expressMiddleware(server, {
-		context: async ({ req, res }) => buildContext({ req, res }),
-	})
+    "/graphql",
+    cors({
+        origin: "http://localhost:3000",
+        credentials: true,
+    }),
+    express.json(),
+    expressMiddleware(server, {
+        context: async ({ req, res }) => buildContext({ req, res }),
+    })
 );
 
 // Serve frontend files
 app.use(express.static(path.join(__dirname, "frontend/dist")));
 
 app.get("*", (req, res) => {
-	res.sendFile(path.join(__dirname, "frontend/dist", "index.html"));
+    res.sendFile(path.join(__dirname, "frontend/dist", "index.html"));
 });
 
 // Start the server
